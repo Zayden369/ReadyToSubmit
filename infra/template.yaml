@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: ReadyToSubmit private document extraction MVP
+Parameters:
+  AllowedOrigin:
+    Type: String
+    Default: '*'
+Resources:
+  Documents:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration: {BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true}
+      BucketEncryption: {ServerSideEncryptionConfiguration: [{ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}}]}
+      LifecycleConfiguration: {Rules: [{Id: DeleteDemoDocumentsAfter24Hours, Status: Enabled, ExpirationInDays: 1}]}
+      CorsConfiguration: {CorsRules: [{AllowedHeaders: ['*'], AllowedMethods: [PUT], AllowedOrigins: [!Ref AllowedOrigin], MaxAge: 600}]}
+  Reviews:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: [{AttributeName: reviewId, AttributeType: S}]
+      KeySchema: [{AttributeName: reviewId, KeyType: HASH}]
+  ReviewApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration: {AllowHeaders: ['content-type','x-review-token'], AllowMethods: ['GET','POST','OPTIONS'], AllowOrigins: [!Ref AllowedOrigin]}
+  ReviewFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/
+      Handler: app.handler
+      Runtime: python3.12
+      Timeout: 28
+      MemorySize: 512
+      Environment: {Variables: {DOCUMENT_BUCKET: !Ref Documents, REVIEWS_TABLE: !Ref Reviews, ALLOWED_ORIGIN: !Ref AllowedOrigin}}
+      Policies:
+        - S3ReadPolicy: {BucketName: !Ref Documents}
+        - S3WritePolicy: {BucketName: !Ref Documents}
+        - DynamoDBCrudPolicy: {TableName: !Ref Reviews}
+        - Statement:
+            - Effect: Allow
+              Action: [textract:StartDocumentAnalysis, textract:GetDocumentAnalysis]
+              Resource: '*'
+      Events:
+        CreateReview: {Type: HttpApi, Properties: {ApiId: !Ref ReviewApi, Path: /reviews, Method: POST}}
+        GetReview: {Type: HttpApi, Properties: {ApiId: !Ref ReviewApi, Path: /reviews/{reviewId}, Method: GET}}
+        UploadUrl: {Type: HttpApi, Properties: {ApiId: !Ref ReviewApi, Path: /reviews/{reviewId}/upload-url, Method: POST}}
+        Process: {Type: HttpApi, Properties: {ApiId: !Ref ReviewApi, Path: /reviews/{reviewId}/documents/{type}/process, Method: POST}}
+        Recheck: {Type: HttpApi, Properties: {ApiId: !Ref ReviewApi, Path: /reviews/{reviewId}/recheck, Method: POST}}
+Outputs:
+  ApiUrl: {Value: !Sub 'https://${ReviewApi}.execute-api.${AWS::Region}.amazonaws.com'}
+  DocumentBucket: {Value: !Ref Documents}
