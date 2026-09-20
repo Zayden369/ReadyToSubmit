@@ -1,0 +1,10 @@
+import {PDFDocument,StandardFonts,rgb} from 'pdf-lib';
+export async function downloadSummary({files,issues,count,docTypes}){
+ const pdf=await PDFDocument.create(); const font=await pdf.embedFont(StandardFonts.Helvetica); const bold=await pdf.embedFont(StandardFonts.HelveticaBold);let page,y;
+ const newPage=()=>{page=pdf.addPage([595,842]);y=770;page.drawRectangle({x:0,y:738,width:595,height:104,color:rgb(.08,.14,.25)});page.drawText('ReadyToSubmit',{x:45,y:791,size:24,font:bold,color:rgb(1,1,1)});page.drawText('Document review / Frontend demonstration',{x:45,y:766,size:11,font,color:rgb(.8,.85,.94)});y=702;};newPage();
+ const safe=t=>String(t).replace(/[^\x20-\x7E]/g,'?');
+ const line=text=>{const words=safe(text).match(/\S{1,55}/g)||[];let row='';const draw=()=>{if(y<65)newPage();page.drawText(row,{x:45,y,size:11,font,color:rgb(.1,.15,.23)});y-=17;};for(const word of words){const next=row?row+' '+word:word;if(font.widthOfTextAtSize(next,11)>500){draw();row=word}else row=next}if(row)draw();y-=12;};
+ line('Prepared: '+new Date().toLocaleString());line('Scheme: SVMCM demonstration checklist. Current official rules not verified.');line('Documents present: '+count+' of 3. Items needing attention: '+issues.length+'.');docTypes.forEach(t=>line(t.title+': '+(files[t.id]?.name||'Not provided')));line('Review findings:');if(!issues.length)line('No issues found by the limited demonstration checks.');issues.forEach(i=>line(i.title+' '+i.description));line('Scope: file presence/type/size, entered-name comparison, and user-confirmed roll number. Uploaded documents are not automatically extracted or authenticated.');line('This is not an eligibility decision, acceptance prediction or official verification. Review current scheme requirements and apply on the official portal.');
+ pdf.getPages().forEach((p,i)=>p.drawText('ReadyToSubmit / '+(i+1),{x:45,y:30,size:9,font,color:rgb(.4,.45,.55)}));
+ const bytes=await pdf.save();const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));const a=document.createElement('a');a.href=url;a.download='ReadyToSubmit-review.pdf';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);
+}
