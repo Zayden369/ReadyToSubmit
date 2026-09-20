@@ -1,3 +1,7 @@
+Live demo
+https://readytosubmit.vercel.app
+
+
 # ReadyToSubmit
 
 An eight-screen scholarship document review frontend based on the supplied wireframes. React + Vite, custom responsive CSS, Lucide icons, and on-demand pdf-lib export. Designed for an eventual AWS-backed implementation; no alternative hosting resources were created.
